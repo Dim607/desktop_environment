@@ -74,13 +74,6 @@ static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() 
 static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
 //static const char *termcmd[]  = { "st", NULL };
 static const char *termcmd[]  = { "kitty", NULL };
-/* commands to change volume */
-static const char *inc_volume[]   = { "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "2%+", NULL };
-static const char *dec_volume[]   = { "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "2%-", NULL };
-static const char *mute[]         = { "wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle", NULL };
-/* commands to change brightness */
-static const char *inc_brightness[] = { "brightnessctl", "set", "+2%", NULL };
-static const char *dec_brightness[] = { "brightnessctl", "set", "2%-", NULL };
 static const char *inc_refreshrate[] = {"xrandr", "--output", "eDP-1", "--mode", "1920x1080", "--rate", "144.03"};
 static const char *dec_refreshrate[] = {"xrandr", "--output", "eDP-1", "--mode", "1920x1080", "--rate", "60.01"};
 /* command to cycle through battery modes */
@@ -126,14 +119,17 @@ static const Key keys[] = {
 	TAGKEYS(                        XK_9,                      			8)
 	{ MODKEY,                       XK_q,      			quit,           {0} },
 
-	/* 						volume keys					*/
-	{ 0,				XF86XK_AudioRaiseVolume,	spawn,		{.v = inc_volume} },
-	{ 0,				XF86XK_AudioLowerVolume,	spawn,		{.v = dec_volume} },
-	{ 0,				XF86XK_AudioMute,		spawn,		{.v = mute} },
-	
+  // Creating a command array when sending mulitple shell commands does not work
+  // beacuse of how spawn works (calls execvp which does not understand ;)
+  // call SHCMD() insted
+  /* 						volume keys					*/
+	{ 0,				XF86XK_AudioRaiseVolume,	spawn,		SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%+; pkill -RTMIN+6 dwmblocks") },
+	{ 0,				XF86XK_AudioLowerVolume,	spawn,		 SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-; pkill -RTMIN+6 dwmblocks")},
+	{ 0,				XF86XK_AudioMute,		spawn,		SHCMD("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle; pkill -RTMIN+6 dwmblocks") },
 	/* 						brightness keys					*/
-	{ 0,				XF86XK_MonBrightnessUp,		spawn,		{.v = inc_brightness} },
-	{ 0,				XF86XK_MonBrightnessDown,	spawn,		{.v = dec_brightness} },
+	{ 0,				XF86XK_MonBrightnessUp,		spawn,		SHCMD("brightnessctl set +2% ; pkill -RTMIN+5 dwmblocks") },
+	{ 0,				XF86XK_MonBrightnessDown,	spawn,		SHCMD("brightnessctl set 2%- ; pkill -RTMIN+5 dwmblocks") },
+	
 	/* 						refresh rate keys				*/
 	{ Mod1Mask,			XF86XK_MonBrightnessUp,		spawn,		{.v = inc_refreshrate} },
 	{ Mod1Mask,			XF86XK_MonBrightnessDown,	spawn,		{.v = dec_refreshrate} },

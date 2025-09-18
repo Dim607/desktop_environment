@@ -1,234 +1,299 @@
-#include<stdlib.h>
-#include<stdio.h>
-#include<string.h>
-#include<unistd.h>
-#include<signal.h>
-#ifndef NO_X
-#include<X11/Xlib.h>
-#endif
-#ifdef __OpenBSD__
-#define SIGPLUS			SIGUSR1+1
-#define SIGMINUS		SIGUSR1-1
-#else
-#define SIGPLUS			SIGRTMIN
-#define SIGMINUS		SIGRTMIN
-#endif
-#define LENGTH(X)               (sizeof(X) / sizeof (X[0]))
-#define CMDLENGTH		50
-#define MIN( a, b ) ( ( a < b) ? a : b )
-#define STATUSLENGTH (LENGTH(blocks) * CMDLENGTH + 1)
+#include <X11/Xlib.h>
+#include <errno.h>
+#include <poll.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/signalfd.h>
+#include <time.h>
+#include <unistd.h>
+#define LENGTH(X) (sizeof(X) / sizeof(X[0]))
+#define CMDLENGTH 50
 
 typedef struct {
-	char* icon;
-	char* command;
-	unsigned int interval;
-	unsigned int signal;
+  char *icon;
+  char *command;
+  unsigned int interval;
+  unsigned int signal;
 } Block;
-#ifndef __OpenBSD__
-void dummysighandler(int num);
-#endif
-void sighandler(int num);
+void sighandler();
+void buttonhandler(int ssi_int);
+// void buttonhandler(int sig, siginfo_t *si, void *ucontext);
+void replace(char *str, char old, char new);
+void remove_all(char *str, char to_remove);
 void getcmds(int time);
-void getsigcmds(unsigned int signal);
+void getsigcmds(int signal);
 void setupsignals();
-void sighandler(int signum);
 int getstatus(char *str, char *last);
-void statusloop();
-//void termhandler();
-/*
- * The termhandler is passed to signal()
- * This is the syntax of the signal function.
- * void (*signal(int sig, void (*func)(int)))(int)
- *
- * The signal function takes as arguments:
- * 	- An int that shows the type of signal. ex SIGINT
- * 	- A pointer to a function that returns nothing (void) and has an integer parameter
- * 
- * Originally termhandler was declared as void(*)(void) (no parameters)
- * This caused make to throw errors when run. 
- * I changed termhandler signature to have an int parameter
- *
- */
-void termhandler(int signum);
-void pstdout();
-#ifndef NO_X
 void setroot();
-static void (*writestatus) () = setroot;
-static int setupX();
+void statusloop();
+void termhandler(int signum);
+
+#include "config.h"
+
 static Display *dpy;
 static int screen;
 static Window root;
-#else
-static void (*writestatus) () = pstdout;
-#endif
-
-
-#include "blocks.h"
-
 static char statusbar[LENGTH(blocks)][CMDLENGTH] = {0};
-static char statusstr[2][STATUSLENGTH];
+static char statusstr[2][256];
+static char exportstring[CMDLENGTH + 16] = "export BUTTON=-;";
+static int button = 0;
 static int statusContinue = 1;
+static int signalFD;
+static int timerInterval = -1;
+static void (*writestatus)() = setroot;
 
-/*
- * This was defined but never used.
- * This caused make to throw errors when run. 
- */
-//static int returnStatus = 0;
-
-//opens process *cmd and stores output in *output
-void getcmd(const Block *block, char *output)
-{
-	//make sure status is same until output is ready
-	char tempstatus[CMDLENGTH] = {0};
-	strcpy(tempstatus, block->icon);
-	FILE *cmdf = popen(block->command, "r");
-	if (!cmdf)
-		return;
-	int i = strlen(block->icon);
-	fgets(tempstatus+i, CMDLENGTH-i-delimLen, cmdf);
-	i = strlen(tempstatus);
-	//if block and command output are both not empty
-	if (i != 0) {
-		//only chop off newline if one is present at the end
-		i = tempstatus[i-1] == '\n' ? i-1 : i;
-		if (delim[0] != '\0') {
-			strncpy(tempstatus+i, delim, delimLen);
-		}
-		else
-			tempstatus[i++] = '\0';
-	}
-	strcpy(output, tempstatus);
-	pclose(cmdf);
+void replace(char *str, char old, char new) {
+  for (char *c = str; *c; c++)
+    if (*c == old)
+      *c = new;
 }
 
-void getcmds(int time)
-{
-	const Block* current;
-	for (unsigned int i = 0; i < LENGTH(blocks); i++) {
-		current = blocks + i;
-		if ((current->interval != 0 && time % current->interval == 0) || time == -1)
-			getcmd(current,statusbar[i]);
-	}
+// the previous function looked nice but unfortunately it didnt work if
+// to_remove was in any position other than the last character theres probably
+// still a better way of doing this
+void remove_all(char *str, char to_remove) {
+  char *read = str;
+  char *write = str;
+  while (*read) {
+    if (*read != to_remove) {
+      *write++ = *read;
+    }
+    ++read;
+  }
+  *write = '\0';
 }
 
-void getsigcmds(unsigned int signal)
-{
-	const Block *current;
-	for (unsigned int i = 0; i < LENGTH(blocks); i++) {
-		current = blocks + i;
-		if (current->signal == signal)
-			getcmd(current,statusbar[i]);
-	}
+int gcd(int a, int b) {
+  int temp;
+  while (b > 0) {
+    temp = a % b;
+
+    a = b;
+    b = temp;
+  }
+  return a;
 }
 
-void setupsignals()
-{
-#ifndef __OpenBSD__
-	    /* initialize all real time signals with dummy handler */
-    for (int i = SIGRTMIN; i <= SIGRTMAX; i++)
-        signal(i, dummysighandler);
-#endif
+// opens process *cmd and stores output in *output
+void getcmd(const Block *block, char *output) {
+  if (block->signal) {
+    output[0] = block->signal;
+    output++;
+  }
+  char *cmd;
+  FILE *cmdf;
 
-	for (unsigned int i = 0; i < LENGTH(blocks); i++) {
-		if (blocks[i].signal > 0)
-			signal(SIGMINUS+blocks[i].signal, sighandler);
-	}
+  // If a button is pressed the command exported to the terminal must be like:
+  // export BUTTON
+  if (button) {
+    /*
+     * exportstring is initialized as:
+     *   static char exportstring[CMDLENGTH + 16] = "export BUTTON=-;";
+     * This means that exportstring[14]="-"
+     * Replace the hyphen with the number stored inside the button variable
+     * */
+    cmd = strcat(exportstring, block->command);
+    // find the ACSCII character for the number stored in button
+    // ex if button = 1 then '0' + 1 = 48 + 1 = 49 = '1' in ASCII
+    cmd[14] = '0' + button;
+    button = 0;
+    cmdf = popen(cmd, "r");
+    cmd[16] = '\0';
+  } else {
+    cmd = block->command;
+    cmdf = popen(cmd, "r");
+  }
 
-}
-
-int getstatus(char *str, char *last)
-{
-	strcpy(last, str);
-	str[0] = '\0';
-	for (unsigned int i = 0; i < LENGTH(blocks); i++)
-		strcat(str, statusbar[i]);
-	str[strlen(str)-strlen(delim)] = '\0';
-	return strcmp(str, last);//0 if they are the same
-}
-
-#ifndef NO_X
-void setroot()
-{
-	if (!getstatus(statusstr[0], statusstr[1]))//Only set root if text has changed.
-		return;
-	XStoreName(dpy, root, statusstr[0]);
-	XFlush(dpy);
-}
-
-int setupX()
-{
-	dpy = XOpenDisplay(NULL);
-	if (!dpy) {
-		fprintf(stderr, "dwmblocks: Failed to open display\n");
-		return 0;
-	}
-	screen = DefaultScreen(dpy);
-	root = RootWindow(dpy, screen);
-	return 1;
-}
-#endif
-
-void pstdout()
-{
-	if (!getstatus(statusstr[0], statusstr[1]))//Only write out if text has changed.
-		return;
-	printf("%s\n",statusstr[0]);
-	fflush(stdout);
-}
-
-
-void statusloop()
-{
-	setupsignals();
-	int i = 0;
-	getcmds(-1);
-	while (1) {
-		getcmds(i++);
-		writestatus();
-		if (!statusContinue)
-			break;
-		sleep(1.0);
-	}
-}
-
-#ifndef __OpenBSD__
-/* this signal handler should do nothing */
-void dummysighandler(int signum)
-{
+  if (!cmdf) {
     return;
+  }
+  char tmpstr[CMDLENGTH] = "";
+  // TODO decide whether its better to use the last value till next time or just
+  // keep trying while the error was the interrupt this keeps trying to read if
+  // it got nothing and the error was an interrupt
+  //  could also just read to a separate buffer and not move the data over if
+  //  interrupted this way will take longer trying to complete 1 thing but will
+  //  get it done the other way will move on to keep going with everything and
+  //  the part that failed to read will be wrong till its updated again
+  // either way you have to save the data to a temp buffer because when it fails
+  // it writes nothing and then then it gets displayed before this finishes
+  char *s;
+  int e;
+  do {
+    errno = 0;
+    s = fgets(tmpstr, CMDLENGTH - (strlen(delim) + 1), cmdf);
+    e = errno;
+  } while (!s && e == EINTR);
+  pclose(cmdf);
+  int i = strlen(block->icon);
+  strcpy(output, block->icon);
+  strcpy(output + i, tmpstr);
+  remove_all(output, '\n');
+  i = strlen(output);
+  if ((i > 0 && block != &blocks[LENGTH(blocks) - 1])) {
+    strcat(output, delim);
+  }
+  i += strlen(delim);
+  output[i++] = '\0';
 }
-#endif
 
-void sighandler(int signum)
-{
-	getsigcmds(signum-SIGPLUS);
-	writestatus();
+void getcmds(int time) {
+  const Block *current;
+  for (int i = 0; i < LENGTH(blocks); i++) {
+    current = blocks + i;
+    if ((current->interval != 0 && time % current->interval == 0) ||
+        time == -1) {
+      getcmd(current, statusbar[i]);
+    }
+  }
 }
 
-void termhandler(int signum)
-{
-	statusContinue = 0;
+// Execute the command of the block for which block->signal == signal
+void getsigcmds(int signal) {
+  const Block *current;
+  for (int i = 0; i < LENGTH(blocks); i++) {
+    current = blocks + i;
+    if (current->signal == signal) {
+      getcmd(current, statusbar[i]);
+    }
+  }
 }
 
-int main(int argc, char** argv)
-{
-	for (int i = 0; i < argc; i++) {//Handle command line arguments
-		if (!strcmp("-d",argv[i]))
-			strncpy(delim, argv[++i], delimLen);
-		else if (!strcmp("-p",argv[i]))
-			writestatus = pstdout;
-	}
-#ifndef NO_X
-	if (!setupX())
-		return 1;
-#endif
-	delimLen = MIN(delimLen, strlen(delim));
-	delim[delimLen++] = '\0';
-	signal(SIGTERM, termhandler);
-	signal(SIGINT, termhandler);
-	statusloop();
-#ifndef NO_X
-	XCloseDisplay(dpy);
-#endif
-	return 0;
+void setupsignals() {
+  sigset_t signals;
+  sigemptyset(&signals);
+  sigaddset(&signals, SIGALRM); // Timer events
+  sigaddset(&signals, SIGUSR1); // Button events
+  // All signals assigned to blocks
+  for (size_t i = 0; i < LENGTH(blocks); i++)
+    if (blocks[i].signal > 0)
+      sigaddset(&signals, SIGRTMIN + blocks[i].signal);
+  // Create signal file descriptor for pooling
+  signalFD = signalfd(-1, &signals, 0);
+  // Block all real-time signals
+  for (int i = SIGRTMIN; i <= SIGRTMAX; i++)
+    sigaddset(&signals, i);
+  sigprocmask(SIG_BLOCK, &signals, NULL);
+  // Do not transform children into zombies
+  struct sigaction sigchld_action = {.sa_handler = SIG_DFL,
+                                     .sa_flags = SA_NOCLDWAIT};
+  sigaction(SIGCHLD, &sigchld_action, NULL);
+}
+
+int getstatus(char *str, char *last) {
+  strcpy(last, str);
+  str[0] = '\0';
+  for (int i = 0; i < LENGTH(blocks); i++) {
+    strcat(str, statusbar[i]);
+    if (i == LENGTH(blocks) - 1)
+      strcat(str, " ");
+  }
+  str[strlen(str) - 1] = '\0';
+  return strcmp(str, last); // 0 if they are the same
+}
+
+void setroot() {
+  if (!getstatus(statusstr[0],
+                 statusstr[1])) // Only set root if text has changed.
+    return;
+  Display *d = XOpenDisplay(NULL);
+  if (d) {
+    dpy = d;
+  }
+  screen = DefaultScreen(dpy);
+  root = RootWindow(dpy, screen);
+  XStoreName(dpy, root, statusstr[0]);
+  XCloseDisplay(dpy);
+}
+
+void pstdout() {
+  if (!getstatus(statusstr[0],
+                 statusstr[1])) // Only write out if text has changed.
+    return;
+  printf("%s\n", statusstr[0]);
+  fflush(stdout);
+}
+
+void statusloop() {
+  setupsignals();
+  // first figure out the default wait interval by finding the
+  // greatest common denominator of the intervals
+  for (int i = 0; i < LENGTH(blocks); i++) {
+    if (blocks[i].interval) {
+      timerInterval = gcd(blocks[i].interval, timerInterval);
+    }
+  }
+  getcmds(-1);    // Fist time run all commands
+  raise(SIGALRM); // Schedule first timer event
+  int ret;
+  struct pollfd pfd[] = {{.fd = signalFD, .events = POLLIN}};
+  while (statusContinue) {
+    // Wait for new signal
+    ret = poll(pfd, sizeof(pfd) / sizeof(pfd[0]), -1);
+    if (ret < 0 || !(pfd[0].revents & POLLIN))
+      break;
+    sighandler(); // Handle signal
+  }
+}
+
+void sighandler() {
+  static int time = 0;
+  struct signalfd_siginfo si;
+  int ret = read(signalFD, &si, sizeof(si));
+  if (ret < 0)
+    return;
+  int signal = si.ssi_signo;
+  switch (signal) {
+  case SIGALRM:
+    // Execute blocks and schedule the next timer event
+    getcmds(time);
+    alarm(timerInterval);
+    time += timerInterval;
+    break;
+    // This is never used because dwm only send SIGRTMIN+n signals
+    // maybe SIGUSR1 was sent in earlier versions of dwm
+  case SIGUSR1:
+    buttonhandler(si.ssi_int);
+    // TODO maybe remove
+    getsigcmds(SIGUSR1);
+  default:
+    // Enter this case when receiving a signal above like SIGRTMIN+n
+    buttonhandler(si.ssi_int);
+    // Execute the block that has the given signal
+    getsigcmds(signal - SIGRTMIN);
+    break;
+  }
+  writestatus();
+}
+
+void buttonhandler(int ssi_int) {
+  // only use the 8th lower bits of ssi_int
+  char button_local[2] = {'0' + ssi_int & 0xff, '\0'};
+  int sig = ssi_int >> 8;
+  const Block *current;
+  for (int i = 0; i < LENGTH(blocks); i++) {
+    current = blocks + i;
+    if (current->signal == sig)
+      break;
+  }
+  // setenv("BLOCK_BUTTON", button_local, 1);
+  setenv("BUTTON", button_local, 1);
+  button = ssi_int;
+}
+
+void termhandler(int signum) { statusContinue = 0; }
+
+int main(int argc, char **argv) {
+  for (int i = 0; i < argc; i++) {
+    if (!strcmp("-d", argv[i]))
+      delim = argv[++i];
+    else if (!strcmp("-p", argv[i]))
+      writestatus = pstdout;
+  }
+  signal(SIGTERM, termhandler);
+  signal(SIGINT, termhandler);
+  statusloop();
+  close(signalFD);
 }

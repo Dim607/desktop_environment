@@ -1,0 +1,14 @@
+# Object files
+*.o
+
+# Common suckless binaries
+dwm/dwm
+dmenu/dmenu
+dmenu/stest
+dmenu/dmenu_run
+dmenu/dmenu_path
+dwmblocks/dwmblocks
+
+# Patch rejects / merge leftovers
+*.orig
+*.rej

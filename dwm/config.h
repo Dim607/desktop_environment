@@ -25,8 +25,8 @@ static const char *colors[][3]      = {
 };
 
 /* tagging */
-//static const char *tags[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9" };
-static const char *tags[] = { "󰈹","",  "3", "4", "5", "6", "7", "8", "9" };
+static const char *tags[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+// static const char *tags[] = { "󰈹","",  "3", "4", "5", "6", "7", "8", "9" };
 
 static const Rule rules[] = {
 	/* xprop(1):
@@ -35,8 +35,8 @@ static const Rule rules[] = {
 	 */
 	/* class      		instance    title       tags mask     isfloating   monitor */
 	{ "Gimp",     		NULL,       NULL,       0,            1,           -1 },
-	{ "firefox",    	NULL,       NULL,       1 << 0,       0,           -1 },
-	{ "kitty",  		  NULL,       NULL,       1 << 1,       0,           -1 },
+	// { "firefox",    	NULL,       NULL,       1 << 0,       0,           -1 },
+	// { "kitty",  		  NULL,       NULL,       1 << 1,       0,           -1 },
 	// { "spotify-launcher",  	NULL,       NULL,       1 << 2,       0,           -1 },
 	// { "discord",  		NULL,       NULL,       1 << 3,       0,           -1 },
 
@@ -119,13 +119,13 @@ static const Key keys[] = {
 	TAGKEYS(                        XK_9,                      			8)
 	{ MODKEY,                       XK_q,      			quit,           {0} },
 
-  // Creating a command array when sending mulitple shell commands does not work
-  // beacuse of how spawn works (calls execvp which does not understand ;)
+  // Creating a command array when sending multiple shell commands does not work
+  // beacuse of spawn (calls execvp which does not understand: ;)
   // call SHCMD() insted
   /* 						volume keys					*/
 	{ 0,				XF86XK_AudioRaiseVolume,	spawn,		SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%+; pkill -RTMIN+6 dwmblocks") },
 	{ 0,				XF86XK_AudioLowerVolume,	spawn,		 SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-; pkill -RTMIN+6 dwmblocks")},
-	{ 0,				XF86XK_AudioMute,		spawn,		SHCMD("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle; pkill -RTMIN+6 dwmblocks") },
+	{ 0,				XF86XK_AudioMute,		      spawn,		SHCMD("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle; pkill -RTMIN+6 dwmblocks") },
 	/* 						brightness keys					*/
 	{ 0,				XF86XK_MonBrightnessUp,		spawn,		SHCMD("brightnessctl set +2% ; pkill -RTMIN+5 dwmblocks") },
 	{ 0,				XF86XK_MonBrightnessDown,	spawn,		SHCMD("brightnessctl set 2%- ; pkill -RTMIN+5 dwmblocks") },

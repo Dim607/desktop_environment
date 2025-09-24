@@ -122,19 +122,21 @@ static const Key keys[] = {
   // Creating a command array when sending multiple shell commands does not work
   // beacuse of spawn (calls execvp which does not understand: ;)
   // call SHCMD() insted
-  /* 						volume keys					*/
-	{ 0,				XF86XK_AudioRaiseVolume,	spawn,		SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%+; pkill -RTMIN+6 dwmblocks") },
-	{ 0,				XF86XK_AudioLowerVolume,	spawn,		 SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-; pkill -RTMIN+6 dwmblocks")},
-	{ 0,				XF86XK_AudioMute,		      spawn,		SHCMD("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle; pkill -RTMIN+6 dwmblocks") },
-	/* 						brightness keys					*/
-	{ 0,				XF86XK_MonBrightnessUp,		spawn,		SHCMD("brightnessctl set +2% ; pkill -RTMIN+5 dwmblocks") },
-	{ 0,				XF86XK_MonBrightnessDown,	spawn,		SHCMD("brightnessctl set 2%- ; pkill -RTMIN+5 dwmblocks") },
-	
-	/* 						refresh rate keys				*/
-	{ Mod1Mask,			XF86XK_MonBrightnessUp,		spawn,		{.v = inc_refreshrate} },
-	{ Mod1Mask,			XF86XK_MonBrightnessDown,	spawn,		{.v = dec_refreshrate} },
+  /* volume keys */
+	{ 0,                      XF86XK_AudioRaiseVolume,	    spawn,      SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%+; pkill -RTMIN+6 dwmblocks") },
+	{ 0,                      XF86XK_AudioLowerVolume,	    spawn,      SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-; pkill -RTMIN+6 dwmblocks")},
+	{ 0,                      XF86XK_AudioMute,		          spawn,      SHCMD("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle; pkill -RTMIN+6 dwmblocks") },
+	/* brightness keys */
+	{ 0,                      XF86XK_MonBrightnessUp,		    spawn,		  SHCMD("brightnessctl set +2% ; pkill -RTMIN+5 dwmblocks") },
+	{ 0,                      XF86XK_MonBrightnessDown,	    spawn,		  SHCMD("brightnessctl set 2%- ; pkill -RTMIN+5 dwmblocks") },
+	/* refresh rate keys */
+	{ Mod1Mask,			          XF86XK_MonBrightnessUp,		    spawn,      {.v = inc_refreshrate} },
+	{ Mod1Mask,			          XF86XK_MonBrightnessDown,	    spawn,      {.v = dec_refreshrate} },
+  /* For screenshots */
+  { 0,				              XK_Print,		                  spawn,		  SHCMD("flameshot screen -c -p ~/Pictures/Screenshots") },
+  { MODKEY,				          XK_Print,		                  spawn,		  SHCMD("flameshot gui -c -p ~/Pictures/Screenshots") },
   /* cycle through battery modes */
-  {MODKEY|ShiftMask,        XK_b,     spawn,                {.v = chg_bat_mode }}
+  {MODKEY|ShiftMask,        XK_b,                         spawn,      {.v = chg_bat_mode }}
 
 	/*						to change language				*/
 //	{ Mod4Mask,			XK_space,			spawn,		{.v = change_keyboard} },

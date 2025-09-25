@@ -68,12 +68,15 @@ static const Layout layouts[] = {
 /* helper for spawning shell commands in the pre dwm-5.0 fashion */
 #define SHCMD(cmd) { .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
 #define STATUSBAR "dwmblocks"
+#define TERMINAL "kitty"
+#define BROWSER "firefox"
+#define MUSIC_PLAYER "spotify-launcher"
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
 static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
 //static const char *termcmd[]  = { "st", NULL };
-static const char *termcmd[]  = { "kitty", NULL };
+static const char *termcmd[]  = { TERMINAL, NULL };
 static const char *inc_refreshrate[] = {"xrandr", "--output", "eDP-1", "--mode", "1920x1080", "--rate", "144.03"};
 static const char *dec_refreshrate[] = {"xrandr", "--output", "eDP-1", "--mode", "1920x1080", "--rate", "60.01"};
 /* command to cycle through battery modes */
@@ -138,10 +141,15 @@ static const Key keys[] = {
   /* cycle through battery modes */
   {MODKEY|ShiftMask,        XK_b,                         spawn,      {.v = chg_bat_mode }},
   /* player keys */
-	{ 0,                      XF86XK_AudioPlay,	    spawn,      SHCMD("playerctl play") },
-	{ 0,                      XF86XK_AudioPause,	    spawn,      SHCMD("playerctl stop") },
-	{ 0,                      XF86XK_AudioNext,	    spawn,      SHCMD("playerctl next") },
-	{ 0,                      XF86XK_AudioPrev,	    spawn,      SHCMD("playerctl previous") },
+	{ 0,                      XF86XK_AudioPlay,	            spawn,      SHCMD("playerctl play") },
+	{ 0,                      XF86XK_AudioPause,	          spawn,      SHCMD("playerctl stop") },
+	{ 0,                      XF86XK_AudioNext,	            spawn,      SHCMD("playerctl next") },
+	{ 0,                      XF86XK_AudioPrev,	            spawn,      SHCMD("playerctl previous") },
+  /* app bindings */
+	{ MODKEY|ShiftMask,       XK_w,	                        spawn,      { .v = (const char*[]) {BROWSER, NULL} } },
+	{ MODKEY|ShiftMask,       XK_s,	                        spawn,      { .v = (const char*[]) {MUSIC_PLAYER, NULL} } },
+	{ MODKEY|ShiftMask,       XK_d,	                        spawn,      { .v = (const char*[]) {"discord", NULL} } },
+	{ ControlMask|ShiftMask,  XK_Escape,	                  spawn,      { .v = (const char*[]) { TERMINAL, "-e", "htop", NULL} } },
 
 
 

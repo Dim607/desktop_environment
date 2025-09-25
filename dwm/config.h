@@ -136,7 +136,17 @@ static const Key keys[] = {
   { 0,				              XK_Print,		                  spawn,		  SHCMD("flameshot screen -c -p ~/Pictures/Screenshots") },
   { MODKEY,				          XK_Print,		                  spawn,		  SHCMD("flameshot gui -c -p ~/Pictures/Screenshots") },
   /* cycle through battery modes */
-  {MODKEY|ShiftMask,        XK_b,                         spawn,      {.v = chg_bat_mode }}
+  {MODKEY|ShiftMask,        XK_b,                         spawn,      {.v = chg_bat_mode }},
+  /* player keys */
+	{ 0,                      XF86XK_AudioPlay,	    spawn,      SHCMD("playerctl play") },
+	{ 0,                      XF86XK_AudioPause,	    spawn,      SHCMD("playerctl stop") },
+	{ 0,                      XF86XK_AudioNext,	    spawn,      SHCMD("playerctl next") },
+	{ 0,                      XF86XK_AudioPrev,	    spawn,      SHCMD("playerctl previous") },
+
+
+
+
+
 
 	/*						to change language				*/
 //	{ Mod4Mask,			XK_space,			spawn,		{.v = change_keyboard} },
